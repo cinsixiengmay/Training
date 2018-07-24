@@ -1,0 +1,106 @@
+{
+  "Parameters": {
+    "pStudent1": {
+      "Type": "String",
+      "Default": "student1"
+    },
+	  "pStudent2": {
+      "Type": "String",
+      "Default": "student2"
+    },
+	    "pStudent3": {
+      "Type": "String",
+      "Default": "student3"
+    },
+	    "pStudent4": {
+      "Type": "String",
+      "Default": "student4"
+    },
+	    "pStudent5": {
+      "Type": "String",
+      "Default": "student5"
+    }
+},
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "Workspace1": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent1"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    },
+	  "Workspace2": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent2"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    },
+    "Workspace3": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent3"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    },
+    "Workspace4": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent4"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    },
+    "Workspace5": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent5"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    }
+  },
+  "Outputs": {
+    "Username": {
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            {
+              "Ref": "pStudent1"
+            }
+          ]
+        ]
+      },
+      "Description": "Workspaces Username"
+    },
+    "StaticMessage": {
+      "Value": "In case of first usage, you will receive a initial password for the Amazon Workspaces Client separately, once the workspace has been created.",
+      "Description": "Workspaces note"
+    }
+  }
+}

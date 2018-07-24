@@ -1,0 +1,1287 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "AccessData Summation Networking Components version 2.116",
+	"Parameters": {
+		"pAZ": {
+			"Type": "List<AWS::EC2::AvailabilityZone::Name>",
+			"Description": "Select two availability zones for your VPC subnets. Secondary used for directory services.",
+			"AllowedPattern": "[a-z][a-z]-[a-z]+-[0-9][a-z]"
+		},
+		"pDomainConfig": {
+			"Description": "Choose a domain configuration or none for no domain",
+			"Type": "String",
+			"MinLength": "4",
+			"Default": "SimpleAD",
+			"AllowedValues": ["SimpleAD",
+			"ExistingDomain",
+			"none"]
+		},
+		"pKeyPair": {
+			"Description": "Amazon EC2 Key Pair (Required)",
+			"Type": "AWS::EC2::KeyPair::KeyName",
+			"MinLength": "1",
+			"ConstraintDescription": "You must select a certificate pair to proceed"
+		},
+		"pVpcCIDR": {
+			"Description": "VPC CIDR",
+			"Type": "String",
+			"Default": "10.0.0.0/16",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pDMZSubnetCIDR": {
+			"Description": "CIDR block of VPC DMZ Subnet",
+			"Type": "String",
+			"Default": "10.0.10.0/24",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pAppPrivateSubnetCIDR": {
+			"Description": "CIDR block of Application Private Subnet",
+			"Type": "String",
+			"Default": "10.0.0.0/24",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pDBPrivateSubnetCIDR": {
+			"Description": "CIDR block of Database Private Subnet",
+			"Type": "String",
+			"Default": "10.0.2.0/24",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pDirectorySubnetCIDR": {
+			"Description": "CIDR block of Directory Subnet (leave default value if NOT creating new SimpleAD)",
+			"Type": "String",
+			"Default": "10.0.11.0/24",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pPublicCIDR": {
+			"Description": "CIDR block of Public IP used to access VPC",
+			"Type": "String",
+			"Default": "255.255.255.255/32",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+		},
+		"pS3Bucket": {
+			"Description": "Create encrypted S3 bucket for evidence",
+			"Type": "String",
+			"Default": "No",
+			"AllowedValues": ["Yes",
+			"No"]
+		}
+	},
+	"Conditions": {
+		"cCreateDirectorySubnet": {
+			"Fn::Equals": [{
+				"Ref": "pDomainConfig"
+			},
+			"SimpleAD"]
+		},
+		"cUseExistingDomain": {
+			"Fn::Equals": [{
+				"Ref": "pDomainConfig"
+			},
+			"ExistingDomain"]
+		},
+		"cCreateS3Bucket": {
+			"Fn::Equals": [{
+				"Ref": "pS3Bucket"
+			},
+			"Yes"]
+		}
+	},
+	"Mappings": {
+		"RegionMap": {
+			"us-east-1": {
+				"Server2016": "ami-f0df538f"
+			},
+			"us-east-2": {
+				"Server2016": "ami-d3e7c5b6"
+			},
+			"us-west-1": {
+				"Server2016": "ami-3dd1c25d"
+			},
+			"us-west-2": {
+				"Server2016": "ami-47897a3f"
+			}
+		}
+	},
+	"Metadata": {
+		"AWS::CloudFormation::Interface": {
+			"ParameterGroups": [{
+				"Label": {
+					"default": "AccessData Lab Network Information"
+				},
+				"Parameters": ["pAZ",
+				"pVpcCIDR",
+				"pAppPrivateSubnetCIDR",
+				"pDBPrivateSubnetCIDR",
+				"pDMZSubnetCIDR"]
+			},
+			{
+				"Label": {
+					"default": "Domain Options"
+				},
+				"Parameters": ["pDomainConfig",
+				"pDirectorySubnetCIDR"]
+			},
+			{
+				"Label": {
+					"default": "Access Information"
+				},
+				"Parameters": ["pPublicCIDR",
+				"pKeyPair",
+				"pS3Bucket"]
+			}],
+			"ParameterLabels": {
+				"pAZ": {
+					"default": "Availability Zones"
+				},
+				"pDomainConfig": {
+					"default": "Domain Config"
+				},
+				"pVpcCIDR": {
+					"default": "CIDR Range"
+				},
+				"pAppPrivateSubnetCIDR": {
+					"default": "CIDR Range"
+				},
+				"pDBPrivateSubnetCIDR": {
+					"default": "CIDR Range"
+				},
+				"pLabClientPrivateSubnetCIDR": {
+					"default": "CIDR Range"
+				},
+				"pDMZSubnetCIDR": {
+					"default": "CIDR Range"
+				},
+				"pDirectorySubnetCIDR": {
+					"default": "CIDR Range"
+				},
+				"pKeyPair": {
+					"default": "Key Pair"
+				},
+				"pPublicCIDR": {
+					"default": "CIDR Range"
+				},
+				"pS3Bucket": {
+					"default": "S3 Bucket"
+				}
+			}
+		}
+	},
+	"Resources": {
+		"rEvidenceBucket": {
+			"Type": "AWS::S3::Bucket",
+			"Condition": "cCreateS3Bucket",
+			"DeletionPolicy": "Retain",
+			"Properties": {
+				"AccessControl": "Private",
+				"VersioningConfiguration": {
+					"Status": "Enabled"
+				}
+			}
+		},
+		"rEvidenceBucketPolicy": {
+			"Type": "AWS::S3::BucketPolicy",
+			"Condition": "cCreateS3Bucket",
+			"DeletionPolicy": "Retain",
+			"DependsOn": "rEvidenceBucket",
+			"Properties": {
+				"Bucket": {
+					"Ref": "rEvidenceBucket"
+				},
+				"PolicyDocument": {
+					"Statement": [{
+						"Sid": "AWSCloudTrailAclCheck20150319",
+						"Effect": "Allow",
+						"Principal": "*",
+						"Action": "s3:GetBucketAcl",
+						"Resource": {
+							"Fn::Join": ["",
+							["arn:aws:s3:::",
+							{
+								"Ref": "rEvidenceBucket"
+							}]]
+						}
+					},
+					{
+						"Sid": "AWSCloudTrailWrite20150319",
+						"Effect": "Allow",
+						"Principal": "*",
+						"Action": "s3:PutObject",
+						"Resource": {
+							"Fn::Join": ["",
+							["arn:aws:s3:::",
+							{
+								"Ref": "rEvidenceBucket"
+							},
+							"/*"]]
+						},
+						"Condition": {
+							"StringEquals": {
+								"s3:x-amz-acl": "bucket-owner-full-control"
+							}
+						}
+					},
+					{
+						"Sid": "DenyUnEncryptedObjectUploads",
+						"Effect": "Deny",
+						"Principal": "*",
+						"Action": "s3:PutObject",
+						"Resource": {
+							"Fn::Join": ["",
+							["arn:aws:s3:::",
+							{
+								"Ref": "rEvidenceBucket"
+							},
+							"/*"]]
+						},
+						"Condition": {
+							"StringNotEquals": {
+								"s3:x-amz-server-side-encryption": "AES256"
+							}
+						}
+					}]
+				}
+			}
+		},
+		"rVPC": {
+			"Type": "AWS::EC2::VPC",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"InstanceTenancy": "default",
+				"EnableDnsSupport": "true",
+				"EnableDnsHostnames": "false",
+				"Tags": [{
+					"Key": "Name",
+					"Value": "ADLab-Production"
+				}]
+			}
+		},
+		"rInternetGateway": {
+			"Type": "AWS::EC2::InternetGateway",
+			"Properties": {
+				"Tags": [{
+					"Key": "Name",
+					"Value": "igw-LabNetwork"
+				}]
+			}
+		},
+		"rAttachGateway": {
+			"Type": "AWS::EC2::VPCGatewayAttachment",
+			"Properties": {
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"InternetGatewayId": {
+					"Ref": "rInternetGateway"
+				}
+			}
+		},
+		"rNATGateway": {
+			"Type": "AWS::EC2::NatGateway",
+			"Properties": {
+				"AllocationId": {
+					"Fn::GetAtt": ["rElasticIP",
+					"AllocationId"]
+				},
+				"SubnetId": {
+					"Ref": "rSubnetDMZ"
+				}
+			}
+		},
+		"rNACLPrivate": {
+			"Type": "AWS::EC2::NetworkAcl",
+			"Properties": {
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "NACL-Private"
+				}]
+			}
+		},
+		"rNACLPublic": {
+			"Type": "AWS::EC2::NetworkAcl",
+			"Properties": {
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "NACL-Public"
+				}]
+			}
+		},
+		"rNACLRuleAllowAllTCPInternal": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 120,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowAllUDPInternal": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Protocol": 17,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 125,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowBastionRDPAccessPrivate": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pDMZSubnetCIDR"
+				},
+				"Protocol": 6,
+				"PortRange": {
+					"From": 3389,
+					"To": 3389
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 130,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowMgmtAccessRDPtoPrivate": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "10.10.0.0/16",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 3389,
+					"To": 3389
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 135,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowReturnTCPPriv": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1024,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 140,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowALLfromPrivEgress": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Egress": true,
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 120,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowAllTCPInternalEgress": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Egress": true,
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 100,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowAllUDPEgressPrivate": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Egress": true,
+				"Protocol": 17,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 125,
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				}
+			}
+		},
+		"rNACLRuleAllowALLTCPEgressPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Egress": true,
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 100,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowAllUDPEgressPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Egress": true,
+				"Protocol": 17,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 125,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowEgressReturnTCP": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Egress": true,
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1024,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 140,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowAllTCPIngressPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 120,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowAllUDPIngressPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pVpcCIDR"
+				},
+				"Protocol": 17,
+				"PortRange": {
+					"From": 1,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 125,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowAllReturnTCP": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 1024,
+					"To": 65535
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 140,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowHTTPfromProd": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 80,
+					"To": 80
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 200,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowBastionRDPAccessPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 3389,
+					"To": 3389
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 210,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLRuleAllowHTTPSPublic": {
+			"Type": "AWS::EC2::NetworkAclEntry",
+			"Properties": {
+				"CidrBlock": "0.0.0.0/0",
+				"Protocol": 6,
+				"PortRange": {
+					"From": 443,
+					"To": 443
+				},
+				"RuleAction": "allow",
+				"RuleNumber": 100,
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				}
+			}
+		},
+		"rNACLAssocAppPrivSubnet": {
+			"Type": "AWS::EC2::SubnetNetworkAclAssociation",
+			"Properties": {
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetPrivateApp"
+				}
+			}
+		},
+		"rNACLAssocDBPrivSubnet": {
+			"Type": "AWS::EC2::SubnetNetworkAclAssociation",
+			"Properties": {
+				"NetworkAclId": {
+					"Ref": "rNACLPrivate"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetPrivateDB"
+				}
+			}
+		},
+		"rNACLAssocDMZPubSubnet": {
+			"Type": "AWS::EC2::SubnetNetworkAclAssociation",
+			"Properties": {
+				"NetworkAclId": {
+					"Ref": "rNACLPublic"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetDMZ"
+				}
+			}
+		},
+		"rElasticIP": {
+			"Type": "AWS::EC2::EIP",
+			"Properties": {
+				"Domain": "vpc"
+			}
+		},
+		"rSubnetDMZ": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pDMZSubnetCIDR"
+				},
+				"AvailabilityZone": {
+					"Fn::Select": [0,
+					{
+						"Ref": "pAZ"
+					}]
+				},
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "DMZSubnet"
+				}]
+			}
+		},
+		"rRouteTableDMZ": {
+			"Type": "AWS::EC2::RouteTable",
+			"Properties": {
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Prod-PublicRoute"
+				}]
+			}
+		},
+		"rRouteDMZIGW": {
+			"Type": "AWS::EC2::Route",
+			"Properties": {
+				"DestinationCidrBlock": "0.0.0.0/0",
+				"RouteTableId": {
+					"Ref": "rRouteTableDMZ"
+				},
+				"GatewayId": {
+					"Ref": "rInternetGateway"
+				}
+			},
+			"DependsOn": "rAttachGateway"
+		},
+		"rRouteTableAssociationDMZ": {
+			"Type": "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties": {
+				"RouteTableId": {
+					"Ref": "rRouteTableDMZ"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetDMZ"
+				}
+			}
+		},
+		"rSubnetPrivateApp": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pAppPrivateSubnetCIDR"
+				},
+				"AvailabilityZone": {
+					"Fn::Select": [0,
+					{
+						"Ref": "pAZ"
+					}]
+				},
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "AppPrivateSubnet"
+				}]
+			}
+		},
+		"rRouteTablePrivate": {
+			"Type": "AWS::EC2::RouteTable",
+			"Properties": {
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Prod-PrivateRoute"
+				}]
+			}
+		},
+		"rRoutePrivate": {
+			"Type": "AWS::EC2::Route",
+			"Properties": {
+				"DestinationCidrBlock": "0.0.0.0/0",
+				"NatGatewayId": {
+					"Ref": "rNATGateway"
+				},
+				"RouteTableId": {
+					"Ref": "rRouteTablePrivate"
+				}
+			}
+		},
+		"rRouteTableAssociationPrivate": {
+			"Type": "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties": {
+				"RouteTableId": {
+					"Ref": "rRouteTablePrivate"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetPrivateApp"
+				}
+			}
+		},
+		"rSubnetPrivateDB": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pDBPrivateSubnetCIDR"
+				},
+				"AvailabilityZone": {
+					"Fn::Select": [0,
+					{
+						"Ref": "pAZ"
+					}]
+				},
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "DBPrivateSubnet"
+				}]
+			}
+		},
+		"rRouteTableAssociationDB": {
+			"Type": "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties": {
+				"RouteTableId": {
+					"Ref": "rRouteTablePrivate"
+				},
+				"SubnetId": {
+					"Ref": "rSubnetPrivateDB"
+				}
+			}
+		},
+		"rSubnetDirectoryServices": {
+			"Type": "AWS::EC2::Subnet",
+			"Condition": "cCreateDirectorySubnet",
+			"Properties": {
+				"CidrBlock": {
+					"Ref": "pDirectorySubnetCIDR"
+				},
+				"AvailabilityZone": {
+					"Fn::Select": [1,
+					{
+						"Ref": "pAZ"
+					}]
+				},
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "DirecotrySubnet"
+				}]
+			}
+		},
+		"rSecurityGroupApp": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Internal access rule",
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "-1",
+					"CidrIp": {
+						"Ref": "pAppPrivateSubnetCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "9132",
+					"ToPort": "9132",
+					"Description": "WCF Services",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "445",
+					"ToPort": "445",
+					"Description": "CIFS/SMB",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "135",
+					"ToPort": "135",
+					"Description": "MSDTC",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "udp",
+					"FromPort": "135",
+					"ToPort": "135",
+					"Description": "MSDTC-UDP",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "TCP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "udp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "UDP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"Fn::If": ["cUseExistingDomain",
+					{
+						"IpProtocol": "-1",
+						"Description": "DC-AD",
+						"CidrIp": {
+							"Ref": "pVpcCIDR"
+						}
+					},
+					{
+						"Ref": "AWS::NoValue"
+					}]
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "3389",
+					"ToPort": "3389",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				}],
+				"SecurityGroupEgress": [{
+					"IpProtocol": "-1",
+					"CidrIp": "0.0.0.0/0"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "SG-AppServers"
+				}]
+			}
+		},
+		"rSecurityGroupSQL": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "SQL access rule",
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "1433",
+					"ToPort": "1433",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "135",
+					"ToPort": "135",
+					"Description": "MSDTC-TCP",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "udp",
+					"FromPort": "135",
+					"ToPort": "135",
+					"Description": "MSDTC-UDP",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "TCP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "udp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "UDP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "3389",
+					"ToPort": "3389",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				}],
+				"SecurityGroupEgress": [{
+					"IpProtocol": "-1",
+					"CidrIp": "0.0.0.0/0"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "SG-SQL"
+				}]
+			}
+		},
+		"rSecurityGroupLabClient": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Client UI access rule",
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "3389",
+					"ToPort": "3389",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "TCP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				}],
+				"SecurityGroupEgress": [{
+					"IpProtocol": "-1",
+					"CidrIp": "0.0.0.0/0"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "SG-LabClient"
+				}]
+			}
+		},
+		"rSecurityGroupWeb": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Web access rule",
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "443",
+					"ToPort": "443",
+					"CidrIp": "0.0.0.0/0"
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "80",
+					"ToPort": "80",
+					"CidrIp": "0.0.0.0/0"
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "135",
+					"ToPort": "135",
+					"Description": "MSDTC",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "1024",
+					"ToPort": "65535",
+					"Description": "TCP Return",
+					"CidrIp": {
+						"Ref": "pVpcCIDR"
+					}
+				},
+				{
+					"IpProtocol": "-1",
+					"Description": "Application Traffic",
+					"CidrIp": {
+						"Ref": "pAppPrivateSubnetCIDR"
+					}
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "3389",
+					"ToPort": "3389",
+					"CidrIp": {
+						"Ref": "pDMZSubnetCIDR"
+					}
+				}],
+				"SecurityGroupEgress": [{
+					"IpProtocol": "-1",
+					"CidrIp": "0.0.0.0/0"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "SG-Web"
+				}]
+			}
+		},
+		"rSecurityGroupBastion": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Bastion access rule",
+				"VpcId": {
+					"Ref": "rVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "3389",
+					"ToPort": "3389",
+					"CidrIp": {
+						"Ref": "pPublicCIDR"
+					}
+				}],
+				"SecurityGroupEgress": [{
+					"IpProtocol": "-1",
+					"CidrIp": "0.0.0.0/0"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "SG-Bastion"
+				}]
+			}
+		},
+		"rBastionInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"Server2016"]
+				},
+				"InstanceType": "t2.micro",
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"Monitoring": "false",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "BastionHost"
+				},
+				{
+					"Key": "Name",
+					"Value": "BastionHost"
+				}],
+				"NetworkInterfaces": [{
+					"DeleteOnTermination": "true",
+					"Description": "Primary network interface",
+					"DeviceIndex": 0,
+					"GroupSet": [{
+						"Ref": "rSecurityGroupBastion"
+					}],
+					"SubnetId": {
+						"Ref": "rSubnetDMZ"
+					},
+					"AssociatePublicIpAddress": "true"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INSTALL RDCM\n",
+						"$url = \"https://download.microsoft.com/download/A/F/0/AF0071F3-B198-4A35-AA90-C68D103BDCCF/rdcman.msi\"\n",
+						"$output = \"$Env:USERPROFILE\\Downloads\\rdcman.msi\"\n",
+						"$wc = New-Object System.Net.WebClient\n",
+						"$wc.DownloadFile($url, $output)\n",
+						"MSIEXEC /i \"$Env:USERPROFILE\\Downloads\\rdcman.msi\" /qn\n",
+						"</powershell>"]]
+					}
+				}
+			}
+		}
+	},
+	"Outputs": {
+		"pAZ": {
+			"Value": {
+				"Fn::Select": [0,
+				{
+					"Ref": "pAZ"
+				}]
+			},
+			"Description": "Availability Zone",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-AZ"
+				}
+			}
+		},
+		"pAZ1": {
+			"Value": {
+				"Fn::Select": [1,
+				{
+					"Ref": "pAZ"
+				}]
+			},
+			"Condition": "cCreateDirectorySubnet",
+			"Description": "Availability Zone for Directory Services"
+		},
+		"rVPC": {
+			"Value": {
+				"Ref": "rVPC"
+			},
+			"Description": "VPC ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-VPCID"
+				}
+			}
+		},
+		"rSubnetPrivateApp": {
+			"Value": {
+				"Ref": "rSubnetPrivateApp"
+			},
+			"Description": "Priave Application Subnet ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-AppSubnetID"
+				}
+			}
+		},
+		"rSubnetPrivateDB": {
+			"Value": {
+				"Ref": "rSubnetPrivateDB"
+			},
+			"Description": "Database Subnet ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-DBSubnetID"
+				}
+			}
+		},
+		"rSubnetDMZ": {
+			"Value": {
+				"Ref": "rSubnetDMZ"
+			},
+			"Description": "DMZ Subnet ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-DMZSubnetID"
+				}
+			}
+		},
+		"rSubnetDirectoryServices": {
+			"Value": {
+				"Ref": "rSubnetDirectoryServices"
+			},
+			"Condition": "cCreateDirectorySubnet",
+			"Description": "Directory Services Subnet ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-DirectorySubnetID"
+				}
+			}
+		},
+		"rSecurityGroupApp": {
+			"Value": {
+				"Ref": "rSecurityGroupApp"
+			},
+			"Description": "Application Security Group ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-AppSecurityGroupID"
+				}
+			}
+		},
+		"rSecurityGroupSQL": {
+			"Value": {
+				"Ref": "rSecurityGroupSQL"
+			},
+			"Description": "Database Security Group ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-DBSecurityGroupID"
+				}
+			}
+		},
+		"rSecurityGroupLabClient": {
+			"Value": {
+				"Ref": "rSecurityGroupLabClient"
+			},
+			"Description": "Lab Client Security Group ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-LabClientSecurityGroupID"
+				}
+			}
+		},
+		"rSecurityGroupWeb": {
+			"Value": {
+				"Ref": "rSecurityGroupWeb"
+			},
+			"Description": "Web Suite Security Group ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-WebSecurityGroupID"
+				}
+			}
+		},
+		"Documentation": {
+			"Value": "http://accessdata.com/products-services/ad-lab",
+			"Description": "Accessdata Lab Documentation"
+		}
+	}
+}

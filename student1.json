@@ -1,0 +1,42 @@
+{
+  "Parameters": {
+    "pStudent1": {
+      "Type": "String",
+      "Default": "student1"
+    }
+  },
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "TestWorkspace1": {
+      "Type": "AWS::WorkSpaces::Workspace",
+      "Properties": {
+        "BundleId": "wsb-5ywg0vyp2",
+        "DirectoryId": "d-9267274d86",
+        "UserName": {
+          "Ref": "pStudent1"
+        },
+        "RootVolumeEncryptionEnabled": false,
+        "UserVolumeEncryptionEnabled": false
+      }
+    }
+  },
+  "Outputs": {
+    "Username": {
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            {
+              "Ref": "pStudent1"
+            }
+          ]
+        ]
+      },
+      "Description": "Workspaces Username"
+    },
+    "StaticMessage": {
+      "Value": "In case of first usage, you will receive a initial password for the Amazon Workspaces Client separately, once the workspace has been created.",
+      "Description": "Workspaces note"
+    }
+  }
+}

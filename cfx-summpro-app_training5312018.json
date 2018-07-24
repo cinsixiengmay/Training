@@ -1,0 +1,480 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "AccessData Summation Application Components version 2.164-Training",
+	"Parameters": {
+		"pKeyPair": {
+			"Description": "Amazon EC2 Key Pair (Required)",
+			"Type": "AWS::EC2::KeyPair::KeyName",
+			"MinLength": "1",
+			"ConstraintDescription": "You must select a certificate pair to proceed"
+		},
+		"pStackName": {
+			"Description": "Enter the production VPC stake name",
+			"Type": "String",
+			"MinLength": "3",
+			"MaxLength": "24",
+			"AllowedPattern": "^[a-zA-Z][-a-zA-Z0-9]*$",
+			"Default": "cfx-summpro-vpc-prod",
+			"ConstraintDescription": "Stack name must be between 6 and 24 characters to proceed"
+		},
+		"pWebType": {
+			"Description": "EC2 Instance type for Web Server",
+			"Type": "String",
+			"Default": "t2.xlarge",
+			"AllowedValues": ["t2.xlarge"]
+		},
+		"pAppType": {
+			"Description": "EC2 Instance type for Application Server",
+			"Type": "String",
+			"Default": "c4.4xlarge",
+			"AllowedValues": ["c4.2xlarge",
+			"c4.4xlarge",
+			"c4.8xlarge"]
+		},
+		"pSQLOption": {
+			"Description": "Deploy SQL Server with AWS licensing or install with your own SQL instance",
+			"Type": "String",
+			"Default": "AWS License",
+			"MinLength": "4",
+			"AllowedValues": ["AWS License",
+			"BYOL"]
+		},
+		"pSQLType": {
+			"Description": "EC2 Instance type for SQL Server",
+			"Type": "String",
+			"Default": "m4.4xlarge",
+			"AllowedValues": ["m4.2xlarge",
+			"m4.4xlarge",
+			"m4.10xlarge"]
+		},
+		"pEULA": {
+			"Description": "You must accept End User License Agreement (EULA), see http://accessdata.com/ADG_EULA",
+			"Type": "String",
+			"AllowedValues": ["Yes"],
+			"ConstraintDescription": "You must accept End User License Agreement (EULA). Select Yes to proceed"
+		}
+	},
+	"Conditions": {
+		"cUseAWSSQL": {
+			"Fn::Equals": [{
+				"Ref": "pSQLOption"
+			},
+			"AWS License"]
+		}
+	},
+	"Mappings": {
+		"RegionMap": {
+			"us-east-1": {
+				"ADLab": "ami-0455f9c36114059c6",
+				"APP": "ami-03f3083e9dc0d890e",				
+				"Web": "ami-04a85e996cf89d6f1",
+				"ADSQL": "ami-",
+				"EvalSQL": "ami-0cf5f4a3c0b86578a"
+			},
+			"us-east-2": {
+				"ADLab": "ami-",
+				"APP": "ami-015309c8c60043832",				
+				"Web": "ami-015309c8c60043832",				
+				"ADSQL": "ami-",
+				"EvalSQL": "ami-"
+			},
+			"us-west-1": {
+				"ADLab": "ami-31acbb51",
+				"APP": "ami-015309c8c60043832",
+				"Web": "ami-015309c8c60043832",
+				"ADSQL": "ami-762f3f16",
+				"EvalSQL": "ami-762f3f16"
+			},
+			"us-west-2": {
+				"ADLab": "ami-31acbb51",
+				"APP": "ami-015309c8c60043832",
+				"Web": "ami-015309c8c60043832",				
+				"ADSQL": "ami-48329130",
+				"EvalSQL": "ami-b60cafce"
+			}
+		}
+	},
+	"Metadata": {
+		"AWS::CloudFormation::Interface": {
+			"ParameterGroups": [{
+				"Label": {
+					"default": "AccessData Lab Network Information"
+				},
+				"Parameters": ["pStackName"]
+			},
+			{
+				"Label": {
+					"default": "EC2 Instance Information"
+				},
+				"Parameters": ["pKeyPair",
+				"pWebType",
+				"pAppType",
+				"pSQLOption",
+				"pSQLType"]
+			},
+			{
+				"Label": {
+					"default": "EULA"
+				},
+				"Parameters": ["pEULA"]
+			}],
+			"ParameterLabels": {
+				"pStackName": {
+					"default": "Stack Name"
+				},
+				"pKeyPair": {
+					"default": "Key Pair"
+				},
+				"pWebType": {
+					"default": "Instance Type"
+				},
+				"pAppType": {
+					"default": "Instance Type"
+				},
+				"pSQLOption": {
+					"default": "Option Select"
+				},
+				"pSQLType": {
+					"default": "Instance Type"
+				},
+				"pEULA": {
+					"default": "Accept Terms and Conditions"
+				}
+			}
+		}
+	},
+	"Resources": {
+		"rADInstanceRole": {
+			"Type": "AWS::IAM::Role",
+			"Properties": {
+				"AssumeRolePolicyDocument": {
+					"Statement": [{
+						"Effect": "Allow",
+						"Principal": {
+							"Service": ["ec2.amazonaws.com"]
+						},
+						"Action": ["sts:AssumeRole"]
+					}]
+				},
+				"ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"],
+				"Path": "/",
+				"Policies": [{
+					"PolicyName": "ADInstanceRole",
+					"PolicyDocument": {
+						"Version": "2012-10-17",
+						"Statement": [{
+							"Effect": "Allow",
+							"Action": ["ssm:CreateAssociation"],
+							"Resource": "*"
+						}]
+					}
+				}]
+			}
+		},
+		"rADInstanceProfile": {
+			"Type": "AWS::IAM::InstanceProfile",
+			"DependsOn": "rADInstanceRole",
+			"Properties": {
+				"Roles": [{
+					"Ref": "rADInstanceRole"
+				}]
+			}
+		},
+		"rADInstancePolicy": {
+			"Type": "AWS::IAM::Policy",
+			"DependsOn": "rADInstanceRole",
+			"Properties": {
+				"Roles": [{
+					"Ref": "rADInstanceRole"
+				}],
+				"PolicyName": "ADInstancePolicy",
+				"PolicyDocument": {
+					"Statement": [{
+						"Effect": "Allow",
+						"Action": ["cloudformation:DescribeStackResource"],
+						"Resource": "*"
+					}]
+				}
+			}
+		},
+		"rCoreGroup": {
+			"Type": "AWS::EC2::PlacementGroup",
+			"Properties": {
+				"Strategy": "cluster"
+			}
+		},
+		"rElasticIP": {
+			"Type": "AWS::EC2::EIP",
+			"Properties": {
+				"Domain": "vpc"
+			}
+		},
+		"rWebEIPAssociation": {
+			"Type": "AWS::EC2::EIPAssociation",
+			"Properties": {
+				"AllocationId": {
+					"Fn::GetAtt": ["rElasticIP",
+					"AllocationId"]
+				},
+				"InstanceId": {
+					"Ref": "rWebServerInstance"
+				}
+			}
+		},
+		"rWebServerInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"Web"]
+				},
+				"InstanceType": {
+					"Ref": "pWebType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-WebSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DMZSubnetID"
+					}
+				},
+				"Monitoring": "false",
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Component",
+					"Value": "WebServer"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "WebServer"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INITIALIZEDISKS\n",
+						"C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Scripts\\InitializeDisks.ps1\n",
+						"#UNINSTALL APPS\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData Distr%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData Evidence%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData License%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'CodeMeter%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"#CONFIGURE MSDTC\n",
+						"$regKey = \"HKLM:\\Software\\Microsoft\\MSDTC\"\n",
+						"Set-ItemProperty -Path $regKey -Name \"AllowOnlySecureRpcCalls\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"FallbackToUnsecureRPCIfNecessary\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"TurnOffRpcSecurity\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"LuTransactions\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccess\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessClients\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessInbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessOutbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"XaTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Restart-Service -Name \"MSDTC\"\n",
+						"</powershell>"]]
+					}
+				}
+			}
+		},
+		"rAppServerInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"EbsOptimized": "true",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"APP"]
+				},
+				"InstanceType": {
+					"Ref": "pAppType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"BlockDeviceMappings": [{
+					"DeviceName": "/dev/sda1",
+					"Ebs": {
+						"VolumeSize": "128"
+					}
+				}],
+				"Monitoring": "false",
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSubnetID"
+					}
+				},
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Name",
+					"Value": "AppServer"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Component",
+					"Value": "WCF"
+				}]
+			}
+		},
+		"rSQLInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"EbsOptimized": "true",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::If": ["cUseAWSSQL",
+					{
+						"Fn::FindInMap": ["RegionMap",
+						{
+							"Ref": "AWS::Region"
+						},
+						"ADSQL"]
+					},
+					{
+						"Fn::FindInMap": ["RegionMap",
+						{
+							"Ref": "AWS::Region"
+						},
+						"EvalSQL"]
+					}]
+				},
+				"InstanceType": {
+					"Ref": "pSQLType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"PlacementGroupName": {
+					"Ref": "rCoreGroup"
+				},
+				"Monitoring": "false",
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DBSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DBSubnetID"
+					}
+				},
+				"Tags": [{
+					"Key": "Component",
+					"Value": "MSSQL"
+				},
+				{
+					"Key": "Name",
+					"Value": "AD-MSSQL"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#ADJUST MEMORY SETTINGS\n",
+						"[System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | out-null\n",
+						"$s = New-Object ('Microsoft.SqlServer.Management.Smo.Server') \"localhost\"\n",
+						"$s.Configuration.MinServerMemory.ConfigValue = 512\n",
+						"$PMem = Get-WmiObject CIM_PhysicalMemory | Measure-Object -Property capacity -sum | % {[math]::round(($_.sum / 1GB),2)}\n",
+						"if ($PMem -ge 64) { $OSMem = 16; $SQLMem = $PMem-16 }\n",
+						"elseif ($PMem -le 16) { $OSMem = $PMem/2; $SQLMem = $PMem/2 }\n",
+						"else { $OSMem = 4 + (($PMem - 16) / 4); $SQLMem = 12 + (3 * (($PMem - 16) / 4)) }\n",
+						"$SQLMem *= 1024\n",
+						"$s.Configuration.MaxServerMemory.ConfigValue = $SQLMem\n",
+						"$s.Configuration.Alter()\n",
+						"</powershell>"]]
+					}
+				}
+			}
+		}
+	},
+	"Outputs": {
+		"Documentation": {
+			"Value": "http://accessdata.com/products-services/ad-lab",
+			"Description": "Accessdata Lab Documentation"
+		},
+		"EULA": {
+			"Value": "http://accessdata.com/ADG_EULA",
+			"Description": "End User License Agreement"
+		},
+		"rWebServerInstance": {
+			"Value": {
+				"Ref": "rWebServerInstance"
+			},
+			"Description": "Web Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-WebServerInstanceID"
+				}
+			}
+		},
+		"rAppServerInstance": {
+			"Value": {
+				"Ref": "rAppServerInstance"
+			},
+			"Description": "App Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-AppServerInstanceID"
+				}
+			}
+		},
+		"rSQLInstance": {
+			"Value": {
+				"Ref": "rSQLInstance"
+			},
+			"Description": "App Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-SQLInstanceID"
+				}
+			}
+		}
+	}
+}

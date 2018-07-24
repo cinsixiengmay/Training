@@ -1,0 +1,1341 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "AccessData Summation Application Components version 2.164",
+	"Parameters": {
+		"pKeyPair": {
+			"Description": "Amazon EC2 Key Pair (Required)",
+			"Type": "AWS::EC2::KeyPair::KeyName",
+			"MinLength": "1",
+			"ConstraintDescription": "You must select a certificate pair to proceed"
+		},
+		"pStackName": {
+			"Description": "Enter the production VPC stake name",
+			"Type": "String",
+			"MinLength": "3",
+			"MaxLength": "24",
+			"AllowedPattern": "^[a-zA-Z][-a-zA-Z0-9]*$",
+			"Default": "cfx-summpro-vpc-prod",
+			"ConstraintDescription": "Stack name must be between 6 and 24 characters to proceed"
+		},
+		"pDomainConfig": {
+			"Description": "Choose a domain configuration or none for no domain",
+			"Type": "String",
+			"MinLength": "4",
+			"Default": "SimpleAD",
+			"AllowedValues": ["SimpleAD",
+			"ExistingDomain",
+			"none"]
+		},
+		"pDirectoryUName": {
+			"Type": "String",
+			"Description": "Enter the User Name of an account to join an existing domain (leave defaults if NOT using domain join)",
+			"MinLength": "6",
+			"MaxLength": "24",
+			"Default": "Administrator",
+			"AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-_]*$",
+			"ConstraintDescription": "Password must be between 6 and 24 characters to proceed"
+		},
+		"pDirectoryPassword": {
+			"Type": "String",
+			"Description": "Create password for SimpleAD Directory Administrator or enter password to join an existing domain",
+			"NoEcho": "true",
+			"MinLength": "6",
+			"MaxLength": "24",
+			"Default": "abc123!",
+			"AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-_.!@&]*$",
+			"ConstraintDescription": "Password must be between 6 and 24 characters and contain alpha number characters (allowed symbols -_.!@&)"
+		},
+		"pDirectoryDNS": {
+			"Description": "IP Address of existing DNS Server (leave defaults if NOT using domain join)",
+			"Type": "String",
+			"Default": "10.0.0.15",
+			"AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}?$"
+		},
+		"pDomainName": {
+			"Description": "Enter domain name for new Simple AD or existing domain name to join existing domain",
+			"Type": "String",
+			"MinLength": "6",
+			"MaxLength": "24",
+			"AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-_.$]*$",
+			"Default": "summpro.local",
+			"ConstraintDescription": "Domain name must be between 6 and 24 characters to proceed"
+		},
+		"pWebType": {
+			"Description": "EC2 Instance type for Web Server",
+			"Type": "String",
+			"Default": "t2.xlarge",
+			"AllowedValues": ["t2.xlarge"]
+		},
+		"pAppType": {
+			"Description": "EC2 Instance type for Application Server",
+			"Type": "String",
+			"Default": "c4.4xlarge",
+			"AllowedValues": ["c4.2xlarge",
+			"c4.4xlarge",
+			"c4.8xlarge"]
+		},
+		"pDPEType": {
+			"Description": "EC2 Instance type for Distributed Processing Engine",
+			"Type": "String",
+			"Default": "m4.4xlarge",
+			"AllowedValues": ["m4.2xlarge",
+			"m4.4xlarge",
+			"m4.10xlarge"]
+		},
+		"pSQLOption": {
+			"Description": "Deploy SQL Server with AWS licensing or install with your own SQL instance",
+			"Type": "String",
+			"Default": "AWS License",
+			"MinLength": "4",
+			"AllowedValues": ["AWS License",
+			"BYOL"]
+		},
+		"pSQLType": {
+			"Description": "EC2 Instance type for SQL Server",
+			"Type": "String",
+			"Default": "m4.4xlarge",
+			"AllowedValues": ["m4.2xlarge",
+			"m4.4xlarge",
+			"m4.10xlarge"]
+		},
+		"pSQLDataVolumeSize": {
+			"Description": "EBS Volume (GB) for SQL Database Storage (minimum recommended 25% of processed Evidence)",
+			"Type": "Number",
+			"Default": "2048",
+			"AllowedValues": ["2048",
+			"4096",
+			"8192",
+			"12288",
+			"16384"]
+		},
+		"pSQLLogVolumeSize": {
+			"Description": "EBS Volume (GB) for SQL Log Storage (Please consult your DBA for recommendations)",
+			"Type": "Number",
+			"Default": "1024",
+			"AllowedValues": ["1024",
+			"2048",
+			"4096",
+			"8192"]
+		},
+		"pEvidenceVolumeSize": {
+			"Description": "EBS Volume (GB) for Evidence Storage (1024GB = 1TB)",
+			"Type": "Number",
+			"Default": "2048",
+			"AllowedValues": ["2048",
+			"4096",
+			"8192",
+			"12288",
+			"16384"]
+		},
+		"pCaseDataVolumeSize": {
+			"Description": "EBS Volume (GB) for Case Data Storage (minimum recommended 25% of Evidence Storage)",
+			"Type": "Number",
+			"Default": "1024",
+			"AllowedValues": ["1024",
+			"2048",
+			"3072",
+			"4096",
+			"8192"]
+		},
+		"pEULA": {
+			"Description": "You must accept End User License Agreement (EULA), see http://accessdata.com/ADG_EULA",
+			"Type": "String",
+			"AllowedValues": ["Yes"],
+			"ConstraintDescription": "You must accept End User License Agreement (EULA). Select Yes to proceed"
+		}
+	},
+	"Conditions": {
+		"cCreateSimpleAD": {
+			"Fn::Equals": [{
+				"Ref": "pDomainConfig"
+			},
+			"SimpleAD"]
+		},
+		"cJoinExistingAD": {
+			"Fn::Equals": [{
+				"Ref": "pDomainConfig"
+			},
+			"ExistingDomain"]
+		},
+		"cNotNoAD": {
+			"Fn::Not": [{
+				"Fn::Equals": [{
+					"Ref": "pDomainConfig"
+				},
+				"none"]
+			}]
+		},
+		"cUseAWSSQL": {
+			"Fn::Equals": [{
+				"Ref": "pSQLOption"
+			},
+			"AWS License"]
+		}
+	},
+	"Mappings": {
+		"RegionMap": {
+			"us-east-1": {
+				"ADLab": "ami-0455f9c36114059c6",
+				"ADSQL": "ami-",
+				"EvalSQL": "ami-ad4c7bd7"
+			},
+			"us-east-2": {
+				"ADLab": "ami-",
+				"ADSQL": "ami-",
+				"EvalSQL": "ami-"
+			},
+			"us-west-1": {
+				"ADLab": "ami-31acbb51",
+				"ADSQL": "ami-762f3f16",
+				"EvalSQL": "ami-762f3f16"
+			},
+			"us-west-2": {
+				"ADLab": "ami-31acbb51",
+				"ADSQL": "ami-48329130",
+				"EvalSQL": "ami-b60cafce"
+			}
+		}
+	},
+	"Metadata": {
+		"AWS::CloudFormation::Interface": {
+			"ParameterGroups": [{
+				"Label": {
+					"default": "AccessData Lab Network Information"
+				},
+				"Parameters": ["pStackName"]
+			},
+			{
+				"Label": {
+					"default": "Domain Options"
+				},
+				"Parameters": ["pDomainConfig"]
+			},
+			{
+				"Label": {
+					"default": "Domain Info used to create new SimpleAD or join Existing Directory"
+				},
+				"Parameters": ["pDomainName",
+				"pDirectoryPassword"]
+			},
+			{
+				"Label": {
+					"default": "Domain Info used only for joining Existing Directory"
+				},
+				"Parameters": ["pDirectoryUName",
+				"pDirectoryDNS"]
+			},
+			{
+				"Label": {
+					"default": "EC2 Instance Information"
+				},
+				"Parameters": ["pKeyPair",
+				"pWebType",
+				"pAppType",
+				"pDPEType",
+				"pSQLOption",
+				"pSQLType",
+				"pEvidenceVolumeSize",
+				"pCaseDataVolumeSize",
+				"pSQLDataVolumeSize",
+				"pSQLLogVolumeSize"]
+			},
+			{
+				"Label": {
+					"default": "EULA"
+				},
+				"Parameters": ["pEULA"]
+			}],
+			"ParameterLabels": {
+				"pStackName": {
+					"default": "Stack Name"
+				},
+				"pDomainConfig": {
+					"default": "Domain"
+				},
+				"pDomainName": {
+					"default": "Domain Name"
+				},
+				"pDirectoryUName": {
+					"default": "User Name"
+				},
+				"pDirectoryPassword": {
+					"default": "Password"
+				},
+				"pDirectoryDNS": {
+					"default": "IP Address"
+				},
+				"pEvidenceVolumeSize": {
+					"default": "Volume Size"
+				},
+				"pCaseDataVolumeSize": {
+					"default": "Volume Size"
+				},
+				"pSQLDataVolumeSize": {
+					"default": "Volume Size"
+				},
+				"pSQLLogVolumeSize": {
+					"default": "Volume Size"
+				},
+				"pKeyPair": {
+					"default": "Key Pair"
+				},
+				"pWebType": {
+					"default": "Instance Type"
+				},
+				"pAppType": {
+					"default": "Instance Type"
+				},
+				"pDPEType": {
+					"default": "Instance Type"
+				},
+				"pSQLOption": {
+					"default": "Option Select"
+				},
+				"pSQLType": {
+					"default": "Instance Type"
+				},
+				"pEULA": {
+					"default": "Accept Terms and Conditions"
+				}
+			}
+		}
+	},
+	"Resources": {
+		"rADInstanceRole": {
+			"Type": "AWS::IAM::Role",
+			"Properties": {
+				"AssumeRolePolicyDocument": {
+					"Statement": [{
+						"Effect": "Allow",
+						"Principal": {
+							"Service": ["ec2.amazonaws.com"]
+						},
+						"Action": ["sts:AssumeRole"]
+					}]
+				},
+				"ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"],
+				"Path": "/",
+				"Policies": [{
+					"PolicyName": "ADInstanceRole",
+					"PolicyDocument": {
+						"Version": "2012-10-17",
+						"Statement": [{
+							"Effect": "Allow",
+							"Action": ["ssm:CreateAssociation"],
+							"Resource": "*"
+						}]
+					}
+				}]
+			}
+		},
+		"rADInstanceProfile": {
+			"Type": "AWS::IAM::InstanceProfile",
+			"DependsOn": "rADInstanceRole",
+			"Properties": {
+				"Roles": [{
+					"Ref": "rADInstanceRole"
+				}]
+			}
+		},
+		"rADInstancePolicy": {
+			"Type": "AWS::IAM::Policy",
+			"DependsOn": "rADInstanceRole",
+			"Properties": {
+				"Roles": [{
+					"Ref": "rADInstanceRole"
+				}],
+				"PolicyName": "ADInstancePolicy",
+				"PolicyDocument": {
+					"Statement": [{
+						"Effect": "Allow",
+						"Action": ["cloudformation:DescribeStackResource"],
+						"Resource": "*"
+					}]
+				}
+			}
+		},
+		"rDirectorySimpleAD": {
+			"Type": "AWS::DirectoryService::SimpleAD",
+			"Condition": "cCreateSimpleAD",
+			"Properties": {
+				"Name": {
+					"Ref": "pDomainName"
+				},
+				"Password": {
+					"Ref": "pDirectoryPassword"
+				},
+				"Size": "Small",
+				"VpcSettings": {
+					"SubnetIds": [{
+						"Fn::ImportValue": {
+							"Fn::Sub": "${pStackName}-AppSubnetID"
+						}
+					},
+					{
+						"Fn::ImportValue": {
+							"Fn::Sub": "${pStackName}-DirectorySubnetID"
+						}
+					}],
+					"VpcId": {
+						"Fn::ImportValue": {
+							"Fn::Sub": "${pStackName}-VPCID"
+						}
+					}
+				}
+			}
+		},
+		"rDocumentJoinSimpleAD": {
+			"Type": "AWS::SSM::Document",
+			"Condition": "cCreateSimpleAD",
+			"Properties": {
+				"Content": {
+					"schemaVersion": "1.2",
+					"description": "Join instances to an AWS Directory Service domain.",
+					"parameters": {
+						"directoryId": {
+							"type": "String",
+							"description": "(Required) The ID of the AWS Directory Service directory."
+						},
+						"directoryName": {
+							"type": "String",
+							"description": "(Required) The name of the directory; for example, test.example.com"
+						},
+						"dnsIpAddresses": {
+							"type": "StringList",
+							"default": [],
+							"description": "(Optional) The IP addresses of the DNS servers in the directory. Required when DHCP is not configured. Learn more at http://docs.aws.amazon.com/directoryservice/latest/simple-ad/join_get_dns_addresses.html",
+							"allowedPattern": "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+						}
+					},
+					"runtimeConfig": {
+						"aws:domainJoin": {
+							"properties": {
+								"directoryId": "{{ directoryId }}",
+								"directoryName": "{{ directoryName }}",
+								"dnsIpAddresses": "{{ dnsIpAddresses }}"
+							}
+						}
+					}
+				}
+			}
+		},
+		"rDocumentJoinExistingAD": {
+			"Type": "AWS::SSM::Document",
+			"Condition": "cJoinExistingAD",
+			"Properties": {
+				"Content": {
+					"schemaVersion": "1.2",
+					"description": "Join servers to an existing domain.",
+					"parameters": {
+						"directoryDNS": {
+							"type": "String",
+							"description": "(Required) The ID of the AWS Directory Service directory."
+						},
+						"directoryName": {
+							"type": "String",
+							"description": "(Required) The name of the directory; for example, test.example.com"
+						},
+						"directoryUser": {
+							"type": "String",
+							"description": "(Required) The User Name of the Directory."
+						},
+						"directoryPass": {
+							"type": "String",
+							"description": "(Required) The User Password of the Directory."
+						}
+					},
+					"runtimeConfig": {
+						"aws:runPowerShellScript": {
+							"properties": [{
+								"id": "0.aws:runPowerShellScript",
+								"runCommand": ["$DNSSrvr = \"{{ directoryDNS }}\"",
+								"$DomainName = \"{{ directoryName }}\"",
+								"$DirectoryUN = \"$DomainName\\{{ directoryUser }}\"",
+								"$DirectoryPW = \"{{ directoryPass }}\" | ConvertTo-SecureString -asPlainText -Force",
+								"$InterfaceId = Get-DnsClient | Where-Object InterfaceAlias -like \"Eth*\" | Select-Object -exp InterfaceIndex",
+								"Set-DnsClientServerAddress -InterfaceIndex \"$InterfaceId\" -ServerAddresses ($DNSSrvr)",
+								"$Creds = New-Object System.Management.Automation.PSCredential($DirectoryUN,$DirectoryPW)",
+								"Add-Computer -DomainName $DomainName -Credential $Creds",
+								"#ADD DNS SUFFIX",
+								"$DNSSuffixList = @()",
+								"$DNSSuffixList += $(Get-DnsClientGlobalSetting).SuffixSearchList",
+								"$DNSSuffixList = @($DomainName) + $DNSSuffixList",
+								"Set-DnsClientGlobalSetting -SuffixSearchList $DNSSuffixList",
+								"SHUTDOWN /r /t 01"]
+							}]
+						}
+					}
+				}
+			}
+		},
+		"rAssocationSimpleAD": {
+			"Type": "AWS::SSM::Association",
+			"Condition": "cCreateSimpleAD",
+			"Properties": {
+				"Name": {
+					"Ref": "rDocumentJoinSimpleAD"
+				},
+				"Parameters": {
+					"directoryId": [{
+						"Ref": "rDirectorySimpleAD"
+					}],
+					"directoryName": [{
+						"Ref": "pDomainName"
+					}],
+					"dnsIpAddresses": {
+						"Fn::GetAtt": ["rDirectorySimpleAD",
+						"DnsIpAddresses"]
+					}
+				},
+				"Targets": [{
+					"Key": "InstanceIds",
+					"Values": [{
+						"Ref": "rWebServerInstance"
+					},
+					{
+						"Ref": "rAppServerInstance"
+					},
+					{
+						"Ref": "rSQLInstance"
+					}]
+				}]
+			}
+		},
+		"rAssocationSimpleADASG": {
+			"Type": "AWS::SSM::Association",
+			"Condition": "cCreateSimpleAD",
+			"Properties": {
+				"Name": {
+					"Ref": "rDocumentJoinSimpleAD"
+				},
+				"Parameters": {
+					"directoryId": [{
+						"Ref": "rDirectorySimpleAD"
+					}],
+					"directoryName": [{
+						"Ref": "pDomainName"
+					}],
+					"dnsIpAddresses": {
+						"Fn::GetAtt": ["rDirectorySimpleAD",
+						"DnsIpAddresses"]
+					}
+				},
+				"Targets": [{
+					"Key": "tag:aws:autoscaling:groupName",
+					"Values": [{
+						"Ref": "rDPEAutoScale"
+					}]
+				}]
+			}
+		},
+		"rAssocationExistingAD": {
+			"Type": "AWS::SSM::Association",
+			"Condition": "cJoinExistingAD",
+			"Properties": {
+				"Name": {
+					"Ref": "rDocumentJoinExistingAD"
+				},
+				"Parameters": {
+					"directoryDNS": [{
+						"Ref": "pDirectoryDNS"
+					}],
+					"directoryName": [{
+						"Ref": "pDomainName"
+					}],
+					"directoryUser": [{
+						"Ref": "pDirectoryUName"
+					}],
+					"directoryPass": [{
+						"Ref": "pDirectoryPassword"
+					}]
+				},
+				"Targets": [{
+					"Key": "InstanceIds",
+					"Values": [{
+						"Ref": "rWebServerInstance"
+					},
+					{
+						"Ref": "rAppServerInstance"
+					},
+					{
+						"Ref": "rSQLInstance"
+					}]
+				}]
+			}
+		},
+		"rAssocationExistingADASG": {
+			"Type": "AWS::SSM::Association",
+			"Condition": "cJoinExistingAD",
+			"Properties": {
+				"Name": {
+					"Ref": "rDocumentJoinExistingAD"
+				},
+				"Parameters": {
+					"directoryDNS": [{
+						"Ref": "pDirectoryDNS"
+					}],
+					"directoryName": [{
+						"Ref": "pDomainName"
+					}],
+					"directoryUser": [{
+						"Ref": "pDirectoryUName"
+					}],
+					"directoryPass": [{
+						"Ref": "pDirectoryPassword"
+					}]
+				},
+				"Targets": [{
+					"Key": "tag:aws:autoscaling:groupName",
+					"Values": [{
+						"Ref": "rDPEAutoScale"
+					}]
+				}]
+			}
+		},
+		"rCoreGroup": {
+			"Type": "AWS::EC2::PlacementGroup",
+			"Properties": {
+				"Strategy": "cluster"
+			}
+		},
+		"rElasticIP": {
+			"Type": "AWS::EC2::EIP",
+			"Properties": {
+				"Domain": "vpc"
+			}
+		},
+		"rWebEIPAssociation": {
+			"Type": "AWS::EC2::EIPAssociation",
+			"Properties": {
+				"AllocationId": {
+					"Fn::GetAtt": ["rElasticIP",
+					"AllocationId"]
+				},
+				"InstanceId": {
+					"Ref": "rWebServerInstance"
+				}
+			}
+		},
+		"rWebServerInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"ADLab"]
+				},
+				"InstanceType": {
+					"Ref": "pWebType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-WebSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DMZSubnetID"
+					}
+				},
+				"Monitoring": "false",
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Component",
+					"Value": "WebServer"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "WebServer"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INITIALIZEDISKS\n",
+						"C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Scripts\\InitializeDisks.ps1\n",
+						"#UNINSTALL APPS\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData Distr%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData Evidence%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData License%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'CodeMeter%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"#CONFIGURE MSDTC\n",
+						"$regKey = \"HKLM:\\Software\\Microsoft\\MSDTC\"\n",
+						"Set-ItemProperty -Path $regKey -Name \"AllowOnlySecureRpcCalls\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"FallbackToUnsecureRPCIfNecessary\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"TurnOffRpcSecurity\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"LuTransactions\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccess\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessClients\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessInbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessOutbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"XaTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Restart-Service -Name \"MSDTC\"\n",
+						"</powershell>"]]
+					}
+				}
+			}
+		},
+		"rAppServerInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"EbsOptimized": "true",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"ADLab"]
+				},
+				"InstanceType": {
+					"Ref": "pAppType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"BlockDeviceMappings": [{
+					"DeviceName": "/dev/sda1",
+					"Ebs": {
+						"VolumeSize": "128"
+					}
+				}],
+				"Monitoring": "false",
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSubnetID"
+					}
+				},
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Name",
+					"Value": "AppServer"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Component",
+					"Value": "WCF"
+				}],
+				"Volumes": [{
+					"Device": "xvdf",
+					"VolumeId": {
+						"Ref": "rADTempVolume"
+					}
+				},
+				{
+					"Device": "xvdg",
+					"VolumeId": {
+						"Ref": "rEvidenceStorageVolume"
+					}
+				},
+				{
+					"Device": "xvdh",
+					"VolumeId": {
+						"Ref": "rCaseStorageVolume"
+					}
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INITIALIZE DISKS\n",
+						"$disks = @()\n",
+						"$disks += Get-Disk | Where number -ne 0 | Where partitionstyle -eq 'raw' | Sort-Object number\n",
+						"foreach ($disk in $disks) {\n",
+						"#Set-Disk -Number $disk.Index -IsReadOnly $False -ErrorAction SilentlyContinue | Out-Null\n",
+						"if ($disk.size -le 2199023255552) { Initialize-Disk -Number $disk.Number -PartitionStyle MBR -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -Confirm:$false }\n",
+						"else { Initialize-Disk -Number $disk.Number -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -Confirm:$false } }\n",
+						"#CREATE DIRECTORIES\n",
+						"New-Item -ItemType Directory -Force -Path D:\\AD\\StateDir\n",
+						"New-Item -ItemType Directory -Force -Path E:\\EVIDENCE\n",
+						"New-Item -ItemType Directory -Force -Path F:\\CASES\n",
+						"#DISABLE SERVICES\n",
+						"Set-Service adprocessingengine -StartupType Manual\n",
+						"#ENABLE PSREMOTE\n",
+						"Enable-PSRemoting –force\n",
+						{
+							"Fn::If": ["cCreateSimpleAD",
+							{
+								"Fn::Join": ["",
+								["#ENABLE FEATURES\n",
+								"Add-WindowsFeature RSAT-AD-Tools\n",
+								"Add-WindowsFeature GPMC\n"]]
+							},
+							{
+								"Ref": "AWS::NoValue"
+							}]
+						},
+						{
+							"Fn::If": ["cNotNoAD",
+							{
+								"Fn::Join": ["",
+								["gpupdate /force\n",
+								"cmd /c \"sc config \"\"adprocessingmanager\"\" obj= \"\"",
+								{
+									"Ref": "pDomainName"
+								},
+								"\\",
+								{
+									"Ref": "pDirectoryUName"
+								},
+								"\"\" password= \"\"",
+								{
+									"Ref": "pDirectoryPassword"
+								},
+								"\"\"\"\n"]]
+							},
+							{
+								"Ref": "AWS::NoValue"
+							}]
+						},
+						"</powershell>"]]
+					}
+				}
+			}
+		},
+		"rADTempVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Encrypted": "true",
+				"Size": "1024",
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "ADTemp"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "DPE-ADTemp"
+				},
+				{
+					"Key": "Product",
+					"Value": "SummationPro"
+				}]
+			}
+		},
+		"rCaseStorageVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Encrypted": "true",
+				"Size": {
+					"Ref": "pCaseDataVolumeSize"
+				},
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "CaseStorage"
+				},
+				{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "DPM-CaseData"
+				}]
+			}
+		},
+		"rEvidenceStorageVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Encrypted": "true",
+				"Size": {
+					"Ref": "pEvidenceVolumeSize"
+				},
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "EvidenceData"
+				},
+				{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Name",
+					"Value": "DPM-Evidence"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				}]
+			}
+		},
+		"rDPELaunchConfig": {
+			"Type": "AWS::AutoScaling::LaunchConfiguration",
+			"Properties": {
+				"EbsOptimized": "true",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap",
+					{
+						"Ref": "AWS::Region"
+					},
+					"ADLab"]
+				},
+				"InstanceType": {
+					"Ref": "pDPEType"
+				},
+				"SecurityGroups": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSecurityGroupID"
+					}
+				}],
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"BlockDeviceMappings": [{
+					"DeviceName": "/dev/sdk",
+					"Ebs": {
+						"VolumeSize": "1024",
+						"VolumeType": "gp2"
+					}
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INITIALIZEDISKS\n",
+						"C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Scripts\\InitializeDisks.ps1\n",
+						"#CREATE DIRECTORIES AND UPDATE SERVICES\n",
+						"New-Item -ItemType Directory -Force -Path D:\\AD\\ADTemp\n",
+						"$regKey = \"HKLM:\\Software\\AccessData\\Products\\Common\"\n",
+						"Set-ItemProperty -Path $regKey -Name \"TempDir\" -Value \"D:\\AD\\ADTemp\" -Type STRING -Force\n",
+						"#UNINSTALL APPS\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData Distr%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'AccessData License%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"$app = Get-WmiObject -Query \"SELECT * FROM Win32_Product WHERE Name like 'CodeMeter%'\"\n",
+						"$app.Uninstall() | Out-Null\n",
+						"#ENABLE PSREMOTE\n",
+						"Enable-PSRemoting –force\n",
+						{
+							"Fn::If": ["cNotNoAD",
+							{
+								"Fn::Join": ["",
+								["gpupdate /force\n",
+								"cmd /c \"sc config \"\"adprocessingengine\"\" obj= \"\"",
+								{
+									"Ref": "pDomainName"
+								},
+								"\\",
+								{
+									"Ref": "pDirectoryUName"
+								},
+								"\"\" password= \"\"",
+								{
+									"Ref": "pDirectoryPassword"
+								},
+								"\"\"\"\n"]]
+							},
+							{
+								"Ref": "AWS::NoValue"
+							}]
+						},
+						"</powershell>"]]
+					}
+				}
+			}
+		},
+		"rDPEAutoScale": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			"Properties": {
+				"VPCZoneIdentifier": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AppSubnetID"
+					}
+				}],
+				"DesiredCapacity": "1",
+				"LaunchConfigurationName": {
+					"Ref": "rDPELaunchConfig"
+				},
+				"MinSize": "0",
+				"MaxSize": "16",
+				"PlacementGroup": {
+					"Ref": "rCoreGroup"
+				},
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro",
+					"PropagateAtLaunch": "true"
+				},
+				{
+					"Key": "Name",
+					"Value": "DPEGroup",
+					"PropagateAtLaunch": "true"
+				},
+				{
+					"Key": "Component",
+					"Value": "DPE",
+					"PropagateAtLaunch": "true"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1",
+					"PropagateAtLaunch": "true"
+				}]
+			}
+		},
+		"rSQLInstance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"DisableApiTermination": "false",
+				"InstanceInitiatedShutdownBehavior": "stop",
+				"EbsOptimized": "true",
+				"IamInstanceProfile": {
+					"Ref": "rADInstanceProfile"
+				},
+				"ImageId": {
+					"Fn::If": ["cUseAWSSQL",
+					{
+						"Fn::FindInMap": ["RegionMap",
+						{
+							"Ref": "AWS::Region"
+						},
+						"ADSQL"]
+					},
+					{
+						"Fn::FindInMap": ["RegionMap",
+						{
+							"Ref": "AWS::Region"
+						},
+						"EvalSQL"]
+					}]
+				},
+				"InstanceType": {
+					"Ref": "pSQLType"
+				},
+				"KeyName": {
+					"Ref": "pKeyPair"
+				},
+				"PlacementGroupName": {
+					"Ref": "rCoreGroup"
+				},
+				"Monitoring": "false",
+				"SecurityGroupIds": [{
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DBSecurityGroupID"
+					}
+				}],
+				"SubnetId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-DBSubnetID"
+					}
+				},
+				"Tags": [{
+					"Key": "Component",
+					"Value": "MSSQL"
+				},
+				{
+					"Key": "Name",
+					"Value": "AD-MSSQL"
+				}],
+				"Volumes": [{
+					"Device": "xvdi",
+					"VolumeId": {
+						"Ref": "rSQLDBDataVolume"
+					}
+				},
+				{
+					"Device": "xvdj",
+					"VolumeId": {
+						"Ref": "rSQLDBLogsVolume"
+					}
+				},
+				{
+					"Device": "xvdk",
+					"VolumeId": {
+						"Ref": "rSQLTempDBVolume"
+					}
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["<powershell>\n",
+						"#INITIALIZE DISKS\n",
+						"$disks = @()\n",
+						"$disks += Get-Disk | Where number -ne 0 | Where partitionstyle -eq 'raw' | Sort-Object number\n",
+						"foreach ($disk in $disks) {\n",
+						"#Set-Disk -Number $disk.Index -IsReadOnly $False -ErrorAction SilentlyContinue | Out-Null\n",
+						"if ($disk.size -le 2199023255552) { Initialize-Disk -Number $disk.Number -PartitionStyle MBR -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -Confirm:$false }\n",
+						"else { Initialize-Disk -Number $disk.Number -PartitionStyle GPT -PassThru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume -FileSystem NTFS -Confirm:$false } }\n",
+						"#CREATE DIRS\n",
+						"New-Item -ItemType Directory -Force -Path D:\\SQLData\n",
+						"New-Item -ItemType Directory -Force -Path D:\\SQLBackups\n",
+						"New-Item -ItemType Directory -Force -Path E:\\SQLLogs\n",
+						"New-Item -ItemType Directory -Force -Path F:\\SQLTemp\n",
+						"#GRANT PERMISSIONS\n",
+						"$rule = new-object System.Security.AccessControl.FileSystemAccessRule (\"NT Service\\MSSQLSERVER\",\"FullControl\",\"Allow\")\n",
+						"$dir = \"D:\\SQLData\"\n",
+						"$acl = Get-ACL $dir\n",
+						"$acl.SetAccessRule($rule)\n",
+						"Set-ACL -Path $dir -AclObject $acl\n",
+						"$dir = \"D:\\SQLBackups\"\n",
+						"$acl = Get-ACL $dir\n",
+						"$acl.SetAccessRule($rule)\n",
+						"Set-ACL -Path $dir -AclObject $acl\n",
+						"$dir = \"E:\\SQLLogs\"\n",
+						"$acl = Get-ACL $dir\n",
+						"$acl.SetAccessRule($rule)\n",
+						"Set-ACL -Path $dir -AclObject $acl\n",
+						"$dir = \"F:\\SQLTemp\"\n",
+						"$acl = Get-ACL $dir\n",
+						"$acl.SetAccessRule($rule)\n",
+						"Set-ACL -Path $dir -AclObject $acl\n",
+						"#CONFIGURE MSDTC\n",
+						"$regKey = \"HKLM:\\Software\\Microsoft\\MSDTC\"\n",
+						"Set-ItemProperty -Path $regKey -Name \"AllowOnlySecureRpcCalls\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"FallbackToUnsecureRPCIfNecessary\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey -Name \"TurnOffRpcSecurity\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"LuTransactions\" -Value \"0\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccess\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessClients\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessInbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessOutbound\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"NetworkDtcAccessTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Set-ItemProperty -Path $regKey\\Security -Name \"XaTransactions\" -Value \"1\" -Type DWORD -Force\n",
+						"Restart-Service -Name \"MSDTC\"\n",
+						"#ADJUST MEMORY SETTINGS\n",
+						"[System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | out-null\n",
+						"$s = New-Object ('Microsoft.SqlServer.Management.Smo.Server') \"localhost\"\n",
+						"$s.Configuration.MinServerMemory.ConfigValue = 512\n",
+						"$PMem = Get-WmiObject CIM_PhysicalMemory | Measure-Object -Property capacity -sum | % {[math]::round(($_.sum / 1GB),2)}\n",
+						"if ($PMem -ge 64) { $OSMem = 16; $SQLMem = $PMem-16 }\n",
+						"elseif ($PMem -le 16) { $OSMem = $PMem/2; $SQLMem = $PMem/2 }\n",
+						"else { $OSMem = 4 + (($PMem - 16) / 4); $SQLMem = 12 + (3 * (($PMem - 16) / 4)) }\n",
+						"$SQLMem *= 1024\n",
+						"$s.Configuration.MaxServerMemory.ConfigValue = $SQLMem\n",
+						"$s.Configuration.Alter()\n",
+						"#ADJUST SQL DATA PATHS\n",
+						"$regKey = 'HKLM:\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\MSSQL13.MSSQLSERVER\\MSSQLServer'\n",
+						"Set-ItemProperty -Path $regKey -Name 'DefaultData' -Value 'D:\\SQLData' -Type STRING -Force\n",
+						"Set-ItemProperty -Path $regKey -Name 'DefaultLog' -Value 'E:\\SQLLogs' -Type STRING -Force\n",
+						"Set-ItemProperty -Path $regKey -Name 'BackupDirectory' -Value 'D:\\SQLBackups' -Type STRING -Force\n",
+						"#MOVE TEMPDBs\n",
+						"Invoke-SQLCMD -Query \"USE [master]\"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev, FILENAME = 'F:\\SQLTemp\\tempdev.mdf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev1, FILENAME = 'F:\\SQLTemp\\tempdev1.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev2, FILENAME = 'F:\\SQLTemp\\tempdev2.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev3, FILENAME = 'F:\\SQLTemp\\tempdev3.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev4, FILENAME = 'F:\\SQLTemp\\tempdev4.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev5, FILENAME = 'F:\\SQLTemp\\tempdev5.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev6, FILENAME = 'F:\\SQLTemp\\tempdev6.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = tempdev7, FILENAME = 'F:\\SQLTemp\\tempdev7.ndf') \"\n",
+						"Invoke-SQLCMD -Query \"ALTER DATABASE TempDB MODIFY FILE (NAME = templog, FILENAME = 'F:\\SQLTemp\\templog.ldf') \"\n",
+						"#RESTART SQL\n",
+						"Restart-Service MSSQLSERVER -Force\n",
+						"#DELETE OLD TEMPDBs\n",
+						"Remove-Item –path C:\\SQLTemp –recurse\n",
+						"</powershell>"]]
+					}
+				}
+			}
+		},
+		"rSQLTempDBVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Size": "1024",
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Name",
+					"Value": "SQL-TempDB"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Component",
+					"Value": "MSSQL"
+				}]
+			}
+		},
+		"rSQLDBDataVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Encrypted": "true",
+				"Size": {
+					"Ref": "pSQLDataVolumeSize"
+				},
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "MSSQL"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "SQL-DBData"
+				},
+				{
+					"Key": "Product",
+					"Value": "SummationPro"
+				}]
+			}
+		},
+		"rSQLDBLogsVolume": {
+			"Type": "AWS::EC2::Volume",
+			"Properties": {
+				"AvailabilityZone": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${pStackName}-AZ"
+					}
+				},
+				"Encrypted": "true",
+				"Size": {
+					"Ref": "pSQLLogVolumeSize"
+				},
+				"VolumeType": "gp2",
+				"Tags": [{
+					"Key": "Component",
+					"Value": "MSSQL"
+				},
+				{
+					"Key": "Product",
+					"Value": "SummationPro"
+				},
+				{
+					"Key": "Version",
+					"Value": "6.2.1"
+				},
+				{
+					"Key": "Name",
+					"Value": "SQL-DBLogs"
+				}]
+			}
+		}
+	},
+	"Outputs": {
+		"Documentation": {
+			"Value": "http://accessdata.com/products-services/ad-lab",
+			"Description": "Accessdata Lab Documentation"
+		},
+		"EULA": {
+			"Value": "http://accessdata.com/ADG_EULA",
+			"Description": "End User License Agreement"
+		},
+		"rWebServerInstance": {
+			"Value": {
+				"Ref": "rWebServerInstance"
+			},
+			"Description": "Web Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-WebServerInstanceID"
+				}
+			}
+		},
+		"rAppServerInstance": {
+			"Value": {
+				"Ref": "rAppServerInstance"
+			},
+			"Description": "App Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-AppServerInstanceID"
+				}
+			}
+		},
+		"rSQLInstance": {
+			"Value": {
+				"Ref": "rSQLInstance"
+			},
+			"Description": "App Server EC2 Instance ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-SQLInstanceID"
+				}
+			}
+		},
+		"rDPEAutoScale": {
+			"Value": {
+				"Ref": "rDPEAutoScale"
+			},
+			"Description": "DPE Group AutoScalingGroup ID",
+			"Export": {
+				"Name": {
+					"Fn::Sub": "${AWS::StackName}-DPEAutoInstanceID"
+				}
+			}
+		}
+	}
+}
