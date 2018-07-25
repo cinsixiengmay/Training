@@ -1,6 +1,6 @@
 # AWS AccessData Training Environment
 
-# Create AWS WorkSpaces for FTK Lab
+# Select the product stack to create AWS WorkSpaces
 
 This template create AWS Workspaces on existing training environment.
 
